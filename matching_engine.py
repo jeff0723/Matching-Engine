@@ -131,18 +131,20 @@ class Exchange:
 				order = LimitOrder(order.id,order.product,
 							order.duration_type,market_price,order.quantity,order.side)
 			else:
-				print("Your order is failed")
+				# print("Your order is failed")
+				self.log.append("Order ID-%d is failed"%order.id)
 				return
 		if order.product not in self.orderbook:
 			if order.duration_type==1:
 				self.orderbook[order.product]= OrderBook()
 				self.orderbook[order.product].addOrder(order)
-				log = "Order id: "+str(order.id)+" is submitted."
-				print(log)
-				self.log.append(log)
-				self.id[order.id] = order.product
+				# log = "Order id: "+str(order.id)+" is submitted."
+				# print(log)
+				# self.log.append(log)
+				# self.id[order.id] = order.product
 			else:
-				print("Your order is failed")
+				# print("Your order is failed")
+				self.log.append("Order ID-%d is failed"%order.id)
 			return 
 		#
 		side = order.side
@@ -153,20 +155,20 @@ class Exchange:
 				if order.duration_type == 1:
 
 					self.orderbook[order.product].addOrder(order)
-					log = "Order id: "+str(order.id)+" is submitted."
-					print(log)
-					self.log.append(log)
-					self.id[order.id] = order.product
+					# log = "Order id: "+str(order.id)+" is submitted."
+					# print(log)
+					# self.log.append(log)
+					# self.id[order.id] = order.product
 				else:
-					print("flag 1 ")
-					print("Your order is failed")
+					# print("Your order is failed")
+					self.log.append("Order ID-%d is failed"%order.id)
 					return
 			else:
 
 				if best <= order.price:
 					if order.duration_type==3:
 						if (available < order.quantity):
-							print("Your order is failed")
+							self.log.append("Order ID-%d is failed"%order.id)
 							return
 
 					product = order.product 
@@ -182,40 +184,41 @@ class Exchange:
 							break
 					if order!=None:
 						if order.duration_type==2:
-							print("Order id: " ,str(order.id)," ",order.quantity,"share is cancel.")
+							# print("Order id: " ,str(order.id)," ",order.quantity,"share is cancel.")
+							self.log.append("Order ID-%d %d share is cancel"%(order.id,order.quantity))
 							return 
-						self.orderbook[product].addOrder(order)
-						log = "Order id: "+str(order.id)+" is submitted."
-						print(log)
-						self.log.append(log)
+						# self.orderbook[product].addOrder(order)
+						# log = "Order id: "+str(order.id)+" is submitted."
+						# print(log)
+						# self.log.append(log)
 
 				else:
 					if order.duration_type == 1:
 						self.orderbook[order.product].addOrder(order)
-						log = "Order id: "+str(order.id)+" is submitted."
-						print(log)
-						self.log.append(log)
-						self.id[order.id] = order.product
+						# log = "Order id: "+str(order.id)+" is submitted."
+						# print(log)
+						# self.log.append(log)
+						# self.id[order.id] = order.product
 					else:
-						print("Your order is failed")
+						self.log.append("Order ID-%d is failed"%order.id)
 					return
 
 		if side == "SELL":
 			if best==-1:
 				if order.duration_type == 1:
 					self.orderbook[order.product].addOrder(order)
-					log = "Order id: "+str(order.id)+" is submitted."
-					print(log)
-					self.log.append(log)
-					self.id[order.id] = order.product
+					# log = "Order id: "+str(order.id)+" is submitted."
+					# print(log)
+					# self.log.append(log)
+					# self.id[order.id] = order.product
 				else:
-					print("Your order is failed")
+					self.log.append("Order ID-%d is failed"%order.id)
 					return
 			else:
 				if best >= order.price:
 					if order.duration_type==3:
 						if (available < order.quantity):
-							print("Your order is failed")
+							self.log.append("Order ID-%d is failed"%order.id)
 							return
 
 					product = order.product 
@@ -231,22 +234,22 @@ class Exchange:
 							break
 					if order!=None:
 						if order.duration_type==2:
-							print("Order id: " ,str(order.id)," ",order.quantity,"share is cancel.")
+							self.log.append("Order ID-%d %d share is cancel"%(order.id,order.quantity))
 							return 
 						self.orderbook[product].addOrder(order)
-						log = "Order id: "+str(order.id)+" is submitted."
-						print(log)
-						self.log.append(log)
+						# log = "Order id: "+str(order.id)+" is submitted."
+						# print(log)
+						# self.log.append(log)
 
 				else:
 					if order.duration_type == 1:
 						self.orderbook[order.product].addOrder(order)
-						log = "Order id: "+str(order.id)+" is submitted."
-						print(log)
-						self.log.append(log)
-						self.id[order.id] = order.product
+						# log = "Order id: "+str(order.id)+" is submitted."
+						# print(log)
+						# self.log.append(log)
+						# self.id[order.id] = order.product
 					else:
-						print("Your order is failed")
+						self.log.append("Order ID-%d is failed"%order.id)
 					return
 	
 	def Cancel(self,_id):
@@ -262,6 +265,7 @@ class Exchange:
 		side = order.side
 		product = order.product
 		self.price[product] = best
+		self.log.append("Update Price: %d"%best)
 		if side == "BUY":
 			while(share > 0 and len(self.orderbook[product].ask_id[best]) > 0):
 				counter_part_id = self.orderbook[product].ask_id[best][0]
@@ -269,18 +273,24 @@ class Exchange:
 				if(share >= counter_part.quantity):
 					# print("order id: ",counter_part.id," is filled.")
 					self.orderbook[product].deleteOrder(counter_part.id)
-					self.execution.append(Execution(counter_part_id,
-						product,best,counter_part.quantity,self.time))
-					self.execution.append(Execution(order.id,
-						product,best,counter_part.quantity,self.time))
+					self.log.append("Order ID-%d filled %d@%d"%(counter_part_id,best,counter_part.quantity))
+					self.log.append("Order ID-%d filled %d@%d"%(order.id,best,order.quantity))
+					
+					# self.execution.append(Execution(counter_part_id,
+					# 	product,best,counter_part.quantity,self.time))
+					# self.execution.append(Execution(order.id,
+					# 	product,best,counter_part.quantity,self.time))
 					share -= counter_part.quantity
 
 				else:
 					# print("partial fill order id: ",counter_part.id," ",share)
-					self.execution.append(Execution(counter_part_id,
-						product,best,share,self.time))
-					self.execution.append(Execution(order.id,
-						product,best,share,self.time))
+					# self.execution.append(Execution(counter_part_id,
+					# 	product,best,share,self.time))
+					# self.execution.append(Execution(order.id,
+					# 	product,best,share,self.time))
+					self.log.append("Order ID-%d filled %d@%d"%(counter_part_id,best,counter_part.quantity))
+					self.log.append("Order ID-%d filled %d@%d"%(order.id,best,order.quantity))
+					
 					self.orderbook[product].Change(counter_part.id,share)
 					share = 0
 		if side == "SELL":
@@ -290,19 +300,23 @@ class Exchange:
 				if(share >= counter_part.quantity):
 					# print("order id: ",counter_part.id," is filled.")
 					self.orderbook[product].deleteOrder(counter_part.id)
+					self.log.append("Order ID-%d filled %d@%d"%(counter_part_id,best,counter_part.quantity))
+					self.log.append("Order ID-%d filled %d@%d"%(order.id,best,order.quantity))
 					
-					self.execution.append(Execution(counter_part_id,
-						product,best,counter_part.quantity,self.time))
-					self.execution.append(Execution(order.id,
-						product,best,counter_part.quantity,self.time))
+					# self.execution.append(Execution(counter_part_id,
+					# 	product,best,counter_part.quantity,self.time))
+					# self.execution.append(Execution(order.id,
+					# 	product,best,counter_part.quantity,self.time))
 					share -= counter_part.quantity
 				else:
 					# print("partial fill order id: ",counter_part.id," ",share)
-					self.execution.append(Execution(counter_part_id,
-						product,best,share,self.time))
-					self.execution.append(Execution(order.id,
-						product,best,share,self.time))
-					
+					# self.execution.append(Execution(counter_part_id,
+					# 	product,best,share,self.time))
+					# self.execution.append(Execution(order.id,
+					# 	product,best,share,self.time))
+					self.log.append("Order ID-%d filled %d@%d"%(counter_part_id,best,counter_part.quantity))
+					self.log.append("Order ID-%d filled %d@%d"%(order.id,best,order.quantity))
+				
 					self.orderbook[product].Change(counter_part.id,share)
 					share = 0
 		if share > 0: 
@@ -312,7 +326,7 @@ class Exchange:
 				# self.orderbook[order.product].addOrder(order)
 
 		else:
-			print("order id: ",order.id," is filled.")
+			# print("order id: ",order.id," is filled.")
 			return None
 	def show_market_price(sefl,product):
 		print(self.price[product])
@@ -328,6 +342,8 @@ class Exchange:
 	def show_execution(self):
 		for exe in self.execution:
 			exe.present()
+	def return_log(self):
+		return self.log
 
 
 class Execution:
@@ -417,7 +433,5 @@ if __name__ == "__main__":
 # 	o.addOrder(order)
 # 	count += 1
 # o.present()
-'''
-you can comment like this.
-'''
+
 
