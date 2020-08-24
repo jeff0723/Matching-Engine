@@ -40,19 +40,36 @@ class OrderBook:
 	def Send
 	def AddOrder(self,order):
 		if order.side == "BUY":
-			if order.price not in self.bid:
-				self.bid[order.price] = order.share
-				self.bid_id[order.price] = [order.id]
+			if order.price not in order.bid:
+				order.bid[price] = order.share
+				if order.price_type == MARKET:
+					order.bid_id.append(deque([order.id]))
+					order.bid_id.append(deque())
+				else:
+					order.bid_id.append(deque()) 
+					order.bid_id.append(deque([order.id]))
 			else:
-				self.bid[order.price] += order.share
-				self.bid_id[order.price].append(order.id)
-		if order.side == "SELL":
-			if order.price not in self.ask:
-				self.ask[order.price] = order.share
-				self.ask_id[order.price] = [order.id]
+				order.bid[price] += order.share
+				if order.price_type == MARKET:
+					order.bid_id[0].append(order.id)
+				else:
+					order.bid_id[1].append(order.id)
+		else:
+			if order.price not in order.ask:
+				order.ask[price] = order.share
+				if order.price_type == MARKET:
+					order.ask_id.append(deque([order.id]))
+					order.ask_id.append(deque())
+				else:
+					order.ask_id.append(deque()) 
+					order.ask_id.append(deque([order.id]))
 			else:
-				self.ask[order.price] += order.share
-				self.ask_id[order.price].append(order.id)
+				order.ask[price] += order.share
+				if order.price_type == MARKET:
+					order.ask_id[0].append(order.id)
+				else:
+					order.ask_id[1].append(order.id)	
+		self.order_list[order.id] = order
 
 
 	def DeleteOrder():
