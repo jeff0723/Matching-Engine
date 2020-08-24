@@ -70,7 +70,126 @@ class OrderBook:
 	def Turnover():
 
 	def CallAuction():
+		bid = self.bid
+		ask = self.ask
+		bid_dict = sorted(bid, reverse = True)
+		ask_dict = sorted(ask)
 
+		count_bid, count_ask = bid[bid_dict[0]], ask[ask_dict[0]]
+		if (not bid_dict) or (not ask_dict):
+			self.benchmark.append(benchmark[-1])
+			return
+		if bid_dict[0] < ask_dict[0]:
+			self.benchmark.append(benchmark[-1])
+			return
+		if bid_dict[-1] > ask_dict[-1]:
+			price_range = [bid_dict[-1], ask_dict[-1]]
+
+		# determine possible price range
+		i, j = 0, 0
+		while bid_dict[i] > ask_dict[j]:
+			if count_bid > count_ask:
+				j += 1
+				if j == len(ask_dict): 
+					price_range = [bid_dict[i], ask_dict[j-1]]
+					break
+				count_ask += ask[ask_dict[j]]
+			elif count_bid < count_ask:
+				i += 1
+				if i == len(bid_dict): 
+					price_range = [bid_dict[i-1], ask_dict[j]]
+					break
+				count_bid += bid[bid_dict[i]]
+			else:
+				i += 1
+				j += 1
+				if i == len(bid_dict) or j == len(ask_dict):
+					price_range = [bid_dict[i-1], ask_dict[j-1]]
+					break
+				count_bid += bid[bid_dict[i]]
+				count_ask += ask[ask_dict[j]]
+		else:
+			if bid_dict[i] == ask_dict[j]:
+				price_range = [bid_dict[i], ask_dict[j]]
+			elif count_bid - bid[bid_dict[i]] == count_ask - ask[ask_dict[j]]:
+				price_range = [bid_dict[i-1], ask_dict[j-1]]
+			elif count_bid - bid[bid_dict[i]] > count_ask - ask[ask_dict[j]]:
+				price_range = [bid_dict[i-1], ask_dict[j]]
+			else:
+				price_range = [bid_dict[i], ask_dict[j-1]]
+
+		# determine final price
+		benchmark = self.price_series[-1]
+		if price_range[0] >= benchmark >= price_range[1]:
+			final_price = benchmark
+		elif benchmark > price_range[0]:
+			final_price = price_range[0]
+		else:
+			final_price = price_range[1]
+		# update price series
+		self.price_series.append(final_price)
+		self.benchmark.append(final_price)
+
+		# determine which side is fully filled and which side is partially filled
+		volume_bid, volume_ask = 0, 0
+		for price in bid_dict:
+			if price >= final_price: volume_bid += bid[price]
+			else: break 
+		for price in ask_dict:
+			if price <= final_price: volume_ask += ask[price]
+			else: break
+
+		if volume_ask > volume_bid:
+			# bid fully filled
+			for price in bid_dict:
+				if price >= final_price:
+					for ID in self.bid_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
+			# ask partially filled
+			volume = volume_bid
+			for price in ask_dict:
+				# the part is still fully filled
+				if ask[price] <= volume:
+					volume -= ask[price]
+					for ID in self.ask_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
+				# partial filled
+				else:
+					for ID in self.ask_id[price][1]:
+						if self.order_list[ID].share < volume:
+							self.Turnover(ID, price, self.order_list[ID].share)
+							volume -= self.order_list[ID].share
+						else:
+							self.Turnover(ID, price, volume)
+							return
+		elif volume_bid > volume_ask:
+			for price in ask_dict:
+				if price <= final_price:
+					for ID in self.ask_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
+			volume = volume_ask
+			for price in bid_dict:
+				if bid[price] <= volume:
+					volume -= bid[price]
+					for ID in self.bid_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
+				else:
+					for ID in self.ask_id[price][1]:
+						if self.order_list[ID].share < volume:
+							self.Turnover(ID, price, self.order_list[ID].share)
+							volume -= self.order_list[ID].share
+						else:
+							self.Turnover(ID, price, volume)
+							return
+		else:
+			for price in bid_dict:
+				if price >= final_price:
+					for ID in self.bid_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
+			for price in ask_dict:
+				if price <= final_price:
+					for ID in self.ask_id[price][1]:
+						self.Turnover(ID, price, self.order_list[ID].share)
 	def CheckTime():#check and change state 
 
 	
