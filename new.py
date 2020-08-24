@@ -4,13 +4,14 @@ from collections import deque
 import time
 AUCTION, AUCTION_PLUS_5, TRADING = 1, 2, 3
 OPEN_TIME = 9*60*60*1e6
+CLOSE_TIME = (13*60+25)*60*1e6
 MIN = 60*1e6
 LIMIT, MARKET = 1, 2
 ROD, IOC, FOK= 1, 2, 3
 
 class Order:
 	def __init__(self,time,ID,ticker,price_type,duration_type,
-		price,share,side):
+		share,side,price=0):
 		self.time = time
 		self.id = ID
 		self.ticker = ticker
@@ -25,19 +26,38 @@ class OrderBook:
 	LOG = []#for exchange to 
 	def __init__(self,close):
 		self.state = AUCTION
-		self.benchmark = close # for 
+		self.benchmark = [close] # for 
 		self.ncat= OPEN_TIME#initialize 9am microsecond
 		self.bid = {}
 		self.ask = {}
-		self.bid_id = {}# price:two list
+		self.bid_id = {}# price:two list limit in second ,market in first
 		self.ask_id = {}
 		self.order_list = {} #id:order
-		self.price_series = [50]
+		self.price_series = []
 		self.ma_5 = deque()#last five minutes obejct (time,price,volume)
 		self.total_volume = 0
 		self.total_dollar_volume = 0
 
-	def Send
+	def Send(self,order):
+		#check state
+		if order.price > self.benchmark[0]*1.1 or order.price_type < self.benchmark[0]*0.9:
+			#invalid order
+			return
+		if self.state == AUCTION:
+			if order.price_type==LIMIT and order.duration_type==ROD:
+				self.AddOrder(order)
+				return
+			else:
+				return
+		else:
+			if order.price_type == MARKET:
+				order.price = self.LastPrice()
+			if order.duration_type == FOK:
+				if order.share > self.GetAvailability(order.price,order.side):
+					return
+			self.Fill(order)
+
+
 	def AddOrder(self,order):
 		if order.side == "BUY":
 			if order.price not in order.bid:
@@ -72,21 +92,82 @@ class OrderBook:
 		self.order_list[order.id] = order
 
 
-	def DeleteOrder():
+	def DeleteOrder(self,ID):
+		order = self.order_list[ID]
+		if order.side == "BUY":
+			self.bid[order.price] -= order.quantity
+			if self.bid[order.price] == 0:
+				del self.bid[order.price]
+			if order.price_type == MARKET:
+				self.bid_id[order.price][0].remove(ID)
+			else:
+				self.bid_id[order.price][1].remove(ID)
+		if order.side == "SELL":
+			self.bid[order.price] -= order.quantity
+			if self.bid[order.price] == 0:
+				del self.bid[order.price]
+			if order.price_type == MARKET:
+				self.bid_id[order.price][0].remove(ID)
+			else:
+				self.bid_id[order.price][1].remove(ID)
 
-	def ChangeOrder():
+		del self.order_list[ID]
 
-	def Present():
+	def ChangeOrder(self,ID,change):#only limit order can change
+		order = self.order_list[ID]
+		price = order.price
+		side = order.side
+		new_share = order.share - change
+		if side == "SELL":
+			self.ask[price] -= change
+			self.order_list[ID].share = new_share
+		if side == "BUY":
+			self.bid[price] -= change
+			self.order_list[ID].share = new_share
 
-	def GetBestPrice():
+	def Present(self):
+		print("   BID"+" "*40+"ASK")
+		for price in sorted(self.ask,reverse=True):
+			print("\t"*5+str(price)+": "+str(self.ask[price]))
+		print('-'*55)
+		for price in sorted(self.bid,reverse=True):
+			print(price,": ",self.bid[price])
+	def GetBestPrice(self,side):
+		if(side=="BUY"): 
+			if len(self.ask)!=0:
+				return min(self.ask.keys())
+			else: return -1
+		if(side=="SELL"): 
+			if len(self.bid)!=0:
+				return max(self.bid.keys())
+			else: return -1
 
-	def GetAvailability():
+	def LastPrice(self):
+		return self.price_series[-1]
+
+
+	def GetAvailability(self,price,side):
+		volume = 0
+		if side == "BUY":
+			for p in sorted(self.ask):
+				if(p <= price):
+					volume += self.ask[p]
+				else:
+					break
+		if side == "SELL":
+			for p in sorted(self.bid,reverse=True):
+				if(p >= price):
+					volume += self.bid[p]
+				else:
+					break
+
+		return volume
 
 	def Fill():#return log list
 
 	def Turnover():
 
-	def CallAuction():
+	def CallAuction(self):
 		bid = self.bid
 		ask = self.ask
 		bid_dict = sorted(bid, reverse = True)
@@ -207,13 +288,37 @@ class OrderBook:
 				if price <= final_price:
 					for ID in self.ask_id[price][1]:
 						self.Turnover(ID, price, self.order_list[ID].share)
-	def CheckTime():#check and change state 
+
+	def CheckTime(self,update_time):#check and change state 
+		if update_time < OPEN_TIME or update_time > CLOSE_TIME:
+			self.state = AUCTION
+		else:
+			if update_time < self.ncat: 
+				next_state = AUCTION
+			elif (self.ncat+5*MIN) >update_time > self.ncat : 
+				next_state = AUCTION_PLUS_5
+			else:
+				next_state = TRADING
+			if next_state == AUCTION_PLUS_5 or next_state == TRADING and self.state==AUCTION:
+				self.CallAuction()
+			else:
+				self.state = next_state
 
 	
 
 
 class Exchange:
-	def __init__():
+	def __init__(self):
+		self.open = (8*60+30)*60*1e6
+		self.close = (13*60+30)*60*1e6
+		self.orderbook = {}
+	def Send(self,order):
+		self.orderbook.setdefault(order.ticker,OrderBook())
+		if order.time < self.open or order.time > self.close:
+			return
+		else:
+			self.orderbook[order.ticker].Send(order)
+	
 
 	# def process():
 	# 	input 
