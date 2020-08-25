@@ -72,10 +72,42 @@ class OrderBook:
 		self.order_list[order.id] = order
 
 
-	def DeleteOrder():
-
-	def ChangeOrder():
-
+	def DeleteOrder(self, ID):
+		order = self.order_list[ID]
+		price_type = order.price_type
+		price = order.price
+		share = order.share
+		if order.side == "BUY":
+			self.bid[price] -= share
+			if self.bid[price] == 0:
+				del self.bid[price]
+				del self.bid_id[price]
+			else:
+				if price_type == MARKET:
+					order.bid_id[price][0].remove(ID)
+				else: order.bid_id[price][1].remove(ID)
+		else:
+			self.ask[price] -= share
+			if self.ask[price] == 0:
+				del self.ask[price]
+				del self.ask_id[price]
+			else:
+				if price_type == MARKET:
+					order.ask_id[price][0].remove(ID)
+				else: order.ask_id[price][1].remove(ID)
+		self.order_list.remove(ID)
+	def ChangeOrder(self, ID, change):
+		"""specially for quantity change
+		if price change --> DeleteOrder + AddOrder
+		"""
+		order = self.order_list[ID]
+		changing = change - order.share
+		if order.side == "BUY":
+			self.bid[order.price] += changing
+			order.quantity += changing
+		else:
+			self.ask[order.price] += changing
+			order.quantity += changing
 	def Present():
 
 	def GetBestPrice():
