@@ -72,52 +72,145 @@ class OrderBook:
 		self.order_list[order.id] = order
 
 
-	def DeleteOrder(self, ID):
-		order = self.order_list[ID]
-		price_type = order.price_type
-		price = order.price
-		share = order.share
-		if order.side == "BUY":
-			self.bid[price] -= share
-			if self.bid[price] == 0:
-				del self.bid[price]
-				del self.bid_id[price]
-			else:
-				if price_type == MARKET:
-					order.bid_id[price][0].remove(ID)
-				else: order.bid_id[price][1].remove(ID)
-		else:
-			self.ask[price] -= share
-			if self.ask[price] == 0:
-				del self.ask[price]
-				del self.ask_id[price]
-			else:
-				if price_type == MARKET:
-					order.ask_id[price][0].remove(ID)
-				else: order.ask_id[price][1].remove(ID)
-		self.order_list.remove(ID)
+	def DeleteOrder():
 
-	def ChangeOrder(self, ID, change):
-		"""specially for quantity change
-		if price change --> DeleteOrder + AddOrder
-		"""
-		order = self.order_list[ID]
-		changing = change - order.share
-		if order.side == "BUY":
-			self.bid[order.price] += changing
-			order.quantity += changing
-		else:
-			self.ask[order.price] += changing
-			order.quantity += changing
+	def ChangeOrder():
+
 	def Present():
 
 	def GetBestPrice():
 
 	def GetAvailability():
 
-	def Fill():#return log list
+	def Fill(self, order): # return log list
 
-	def Turnover():
+		try: 
+
+			if order.side == "BUY":
+
+				P = sorted(ask) # search from lowest price
+				i = 0
+
+				while self.order_list[order.id].share > 0 and i < len(P) and order.price >= P[i]:
+					# Claim: at least one match except PSM
+					if self.order_list[order.id].share >= ask[P[i]]:
+						# Turnover all order at price P[i]
+						for Id in ask_id[P[i]][0] + ask_id[P[i]][1]:
+							self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
+							self.Turnover(order.id, P[i], ask[P[i]]) # current order (partial fill)
+						
+						i += 1 # next price
+
+					else:
+						# Claim: Can fill current order except PSM
+						# First turnover market order, then limited order
+						tmp = self.order_list[order.id].share
+
+						for j in [0, 1]:
+							while self.order_list[order.id].share > 0 and ask_id[P[i]][j]:
+
+								Id = ask_id[P[i]][j][0] # lowest price id
+
+								if self.order_list[order.id].share >= self.order_list[Id].share:
+									self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
+								else:
+									self.Turnover(Id, P[i], self.order_list[order.id].share) # counter part order (partial fill)
+						
+						self.Turnover(order.id, P[i], tmp) # current order (full fill)
+
+			if order.side == "SELL":
+				return None
+
+		except:
+
+			print("Price Stabilization Mechanism raised!")
+
+		finally:
+
+				if self.order_list[order.id].share > 0:
+					return self.order_list[order.id]
+				else:
+					return None
+
+	def Turnover(self, orderId, price, volume):
+
+		assert(volume > 0)
+		order = self.order_list[orderId]
+
+		# Update moveing average
+		while ma_5 and ma_5[0][0]+5*MIN >= order.time:
+			self.total_volume -= ma_5[0][2]
+			self.total_dollar_volume -= ma_5[0][1] * ma[0][2]
+			ma_5.popleft()
+
+		# check price stabilization mechanism
+		if state == TRADING or AUCTION_PLUS_5:
+
+			if state == TRADING:
+				stab_mech_price = self.total_dollar_volume / self.total_volume if self.total_volume != 0 else price_series[-1]
+			elif state == AUCTION_PLUS_5:
+				stab_mech_price = benchmark
+
+			if price > stab_mech_price * 1.035 or price < stab_mech_price * 0.965:
+				# Exception!!!
+				raise Exception("Price Stabilization Mechanism.")
+
+		# add new trade into MA
+		ma_5.append((self.order_list[orderId].time, price, volume))
+		self.total_volume += volume
+		self.total_dollar_volume += price*volume
+
+		#add log 
+		'''
+		TODO
+		'''
+		
+		# if partially fill, change order
+		if volume < order.share:
+
+			if order.side == "BUY":
+				self.bid[order.price] -= volume
+			elif order.side == "SELL":
+				self.ask[order.price] -= volume
+
+			self.order_list[orderId].share -= volume
+
+		else:
+			# if full fill, delete order
+			if order.side == "BUY":
+
+				# modify total bid volume at this price
+				self.bid[order.price] -= volume
+
+				# Delete first element of bid_id[p][0] or bid_id[p][1]
+				if self.bid_id[order.price][0]:
+					self.bid_id[order.price][0].popleft()
+				else:
+					self.bid_id[order.price][1].popleft()
+
+				# If nothing left, delete this price entry
+				if self.bid[order.price] == 0:
+					del self.bid[order.price] 
+					del self.bid_id[order.price] 
+
+			elif order.side == "SELL":
+
+				# modify total ask volume at this price
+				self.ask[order.price] -= volume
+
+				# Delete first element of ask_id[p][0] or ask_id[p][1]
+				if self.ask_id[order.price][0]:
+					self.ask_id[order.price][0].popleft()
+				else:
+					self.ask_id[order.price][1].popleft()
+
+				# If nothing left, delete this price entry
+				if self.ask[order.price] == 0:
+					del self.ask[order.price]
+					del self.ask_id[order.price]
+			
+			del self.order_list[orderId] # delete order_list id 
+
 
 	def CallAuction():
 		bid = self.bid
