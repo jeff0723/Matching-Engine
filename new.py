@@ -2,6 +2,7 @@
 #Captial 
 from collections import deque
 import time
+import sys
 AUCTION, AUCTION_PLUS_5, TRADING = 1, 2, 3
 Ms = int(1e6)
 OPEN_TIME = 9*60*60*Ms
@@ -167,6 +168,8 @@ class OrderBook:
 	def Fill(self, order): # return log list
 
 		try:
+			print(a==b)
+
 			if order.side == "BUY":
 
 				P = sorted(self.ask.keys()) # search from lowest price
@@ -181,7 +184,9 @@ class OrderBook:
 						IDs = self.ask_id[P[i]][MARKET] + self.ask_id[P[i]][LIMIT]
 						q = self.ask[P[i]]
 						for Id in IDs:
+							# print("Start to turnover")
 							self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
+						# print("Start to turnover")
 						self.Turnover(order.id, P[i], q) # current order (partial fill)
 						
 						i += 1 # next price
@@ -191,19 +196,22 @@ class OrderBook:
 						# First turnover market order, then limited order
 						tmp = self.order_list[order.id].share
 						for j in [0, 1]:
-							while self.order_list[order.id].share > 0 and (P[i] in self.ask_id) and self.ask_id[P[i]][j]:
+							while tmp > 0 and (P[i] in self.ask_id) and self.ask_id[P[i]][j]:
 
 								Id = self.ask_id[P[i]][j][0] # lowest price id
 
-								if self.order_list[order.id].share >= self.order_list[Id].share:
-									self.order_list[order.id].share -= self.order_list[Id].share
+								if tmp >= self.order_list[Id].share:
+									tmp -= self.order_list[Id].share
+									# print("Start to turnover")
 									self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
 								else:
-									self.Turnover(Id, P[i], self.order_list[order.id].share) # counter part order (partial fill)
-									self.order_list[order.id].share = 0
+									# print("Start to turnover")
+									self.Turnover(Id, P[i], tmp) # counter part order (partial fill)
+									tmp = 0
 
-						
-						self.Turnover(order.id, P[i], tmp)	
+						# print("Start to turnover")
+					
+						self.Turnover(order.id, P[i], self.order_list[order.id].share)	
 						break # current order (full fill)
 
 
@@ -211,16 +219,18 @@ class OrderBook:
 
 				P = sorted(self.bid.keys(),reverse=True) # search from lowest price
 				i = 0
-				print(P[i] , " match", order.price)
+
 				while self.order_list[order.id].share > 0 and i < len(P) and order.price <= P[i]:
 					# Claim: at least one match except PSM
 					if self.order_list[order.id].share > self.bid[P[i]]:
 						# Turnover all order at price P[i]
-						print("1")
+
 						IDs = self.bid_id[P[i]][MARKET] + self.bid_id[P[i]][LIMIT]
 						q = self.bid[P[i]]
 						for Id in IDs:
+
 							self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
+						# print("Start to turnover")
 						self.Turnover(order.id, P[i], q) # current order (partial fill)
 						
 						i += 1 # next price
@@ -228,30 +238,30 @@ class OrderBook:
 					else:
 						# Claim: Can fill current order except PSM
 						# First turnover market order, then limited order
-						print("2")
+						# print("2")
 						tmp = self.order_list[order.id].share
 
 						for j in [0, 1]:
-							while self.order_list[order.id].share > 0 and (P[i] in self.bid_id) and self.bid_id[P[i]][j]:
+							while tmp > 0 and (P[i] in self.bid_id) and self.bid_id[P[i]][j]:
 
 								Id = self.bid_id[P[i]][j][0] # lowest price id
 
-								if self.order_list[order.id].share >= self.order_list[Id].share:
-									self.order_list[order.id].share -= self.order_list[Id].share
+								if tmp >= self.order_list[Id].share:
+									tmp -= self.order_list[Id].share
+									# print("Start to turnover")
+
 									self.Turnover(Id, P[i], self.order_list[Id].share) # counter part order (full fill)
 								else:
-									self.Turnover(Id, P[i], self.order_list[order.id].share) # counter part order (partial fill)
-									self.order_list[order.id].share = 0
+									# print("Start to turnover")
+									self.Turnover(Id, P[i], tmp) # counter part order (partial fill)
+									tmp = 0
 
-						self.Turnover(order.id, P[i], tmp) # current order (full fill)
+
+						# print("Start to turnover")
+						self.Turnover(order.id, P[i], self.order_list[order.id].share) # current order (full fill)
 						break
 
-
-		except CustomError as e:
-			print(e)
-			# print("Price Stabilization Mechanism raised!")
-
-		finally:
+		
 
 			if order.id in self.order_list:
 				return self.order_list[order.id]
@@ -604,6 +614,8 @@ def main():
 
 	exchange = Exchange()
 	count = 0
+	
+	
 	while True:
 
 		info = input().strip().split()
@@ -626,7 +638,8 @@ def main():
 			ID += 1
 		if info[0] == "S":
 			exchange.Show(info[1])
-		# count += 1
+
+
+	# count += 1
 if __name__ == "__main__":
 	main()
-
