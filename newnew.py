@@ -27,6 +27,14 @@ class Order:
 		self.share = share
 		self.side = side
 
+	def Print(self):
+		Pt = { MARKET: "MARKET", LIMIT: "LIMIT" }
+		Dt = { ROD: "ROD", IOC: "IOC", FOK: "FOK" }
+		St = { BUY: "BUY", SELL: "SELL" }
+		print("-> Id: %d,  %s  %s  %s  %d  %s  %1.f" 
+				% (self.id, self.ticker, Pt[self.price_type], Dt[self.duration_type], self.share, St[self.side], self.price))
+
+
 class OrderBook:
 	LOG = [] # for exchange to 
 	def __init__(self, ticker, close=1000):
@@ -51,41 +59,16 @@ class OrderBook:
 		self.ma_5 = deque() # last five minutes obejct (time,price,volume)
 		self.total_volume = 0
 		self.total_dollar_volume = 0
-	
-	def AddLog(self, msg): # Add text message through this function
-		print(msg)
 
-	def ExecLog(self, order, price, volume): 
-		# write execution log, 
-		# call this function if order.id is not in self.order_list
-		assert(volume > 0)
-
-		if volume == order.share:
-			msg = "full"
-		else:
-			msg = "partial"
-
-		print("Time: %d. "%(self.clock) + "%s OrderId %d is %s fill @%.1f with volume %d" % (self.ticker, order.id, msg, price, volume))
-		self.price_series.append(price)
-
-	def Execute(self, ID, price, volume):
-		# write execution log, and delete ID from self.order_list
-		# assert(ID in self.order_list)
-		self.ExecLog(self.order_list[ID], price, volume)
-		if volume == self.order_list[ID].share:
-			self.DeleteOrder(ID)
-		else:
-			self.ChangeOrder(ID, volume)
 
 	def Send(self, order):
-		#check state
+		# print("check state")
 		self.CheckTime(order.time)
-		
-		# check price...
+		# print("check price...")
 		if order.price_type == MARKET:
 			p = self.LastPrice()
 			if order.side == BUY:
-				# why can't we use   order.price = self.benchmark[0]*1.1  ??
+				# why can't we use  order.price = self.benchmark[0]*1.1  ??
 				order.price = max(p, max(self.book[BUY]) if self.book[BUY] else p, max(self.book[SELL]) if self.book[SELL] else p)
 			if order.side == SELL:
 				order.price = min(p, min(self.book[BUY]) if self.book[BUY] else p, min(self.book[SELL]) if self.book[SELL] else p)
@@ -96,6 +79,7 @@ class OrderBook:
 			return
 
 		self.AddLog("Received OrderId %d." % (order.id))
+		order.Print()
 		if self.state == AUCTION:
 			# check order type valid
 			if order.price_type == LIMIT and order.duration_type == ROD:
@@ -103,7 +87,6 @@ class OrderBook:
 			else:
 				self.AddLog("Order %d failed! LIMIT ROD only during auction time." % (order.id))
 				return
-
 		else:
 			if order.duration_type == FOK:
 				if order.share > self.GetAvailability(order.price,order.side):
@@ -127,6 +110,7 @@ class OrderBook:
 		self.order_list[order.id] = order
 		self.AddLog("Time: %d. %s OrderId %d is added." % (self.clock, self.ticker, order.id))
 
+
 	def DeleteOrder(self,ID):
 		# assert(ID in self.order_list)
 		order = self.order_list[ID]
@@ -143,6 +127,7 @@ class OrderBook:
 		self.AddLog("Time: %d. %s OrderId %d is removed." % (self.clock, self.ticker, ID))
 		del self.order_list[ID]
 
+
 	def ChangeOrder(self, ID, change): # only limit order can change
 		assert(change > 0)
 		order = self.order_list[ID]
@@ -154,18 +139,24 @@ class OrderBook:
 		assert(self.order_list[ID].share > 0)
 		self.AddLog("Time: %d. %s OrderId %d is changed." % (self.clock, self.ticker, ID))
 
+
 	def Present(self):
 		print('\n', "="*22, self.ticker , "="*22)
 		print("   BID" + " "*40 + "ASK")
 		for price in sorted(self.book[SELL],reverse=True):
-			print("\t"*5+str(price)+": "+str(self.book[SELL][price]), self.id_book[SELL][price]) 
+			print(" "*30+str(price)+": "+str(self.book[SELL][price]), self.id_book[SELL][price]) 
 		print('-'*55)
 		for price in sorted(self.book[BUY],reverse=True):
 			print(str(price) +" :  " +str(self.book[BUY][price]), self.id_book[BUY][price])
 		print()
 		print(" Market orders: ", list(self.market_order))
 		print(" Last price: ", self.LastPrice())
+		st = { AUCTION: "AUCTION", 
+			   AUCTION_PLUS_5: "AUCTION_PLUS_5", 
+			   TRADING: "TRADING"}
+		print(" State: ", st[self.state])
 		print('', "="*50, '\n')
+
 
 	def GetBestPrice(self,side):
 
@@ -177,32 +168,29 @@ class OrderBook:
 		else: 
 			return -1
 
+
 	def LastPrice(self):
 		return self.price_series[-1]
 
+
+	#============ private function =======================#
+	def AddLog(self, msg): # Add text message through this function
+		print(msg)
+
+
 	def GetAvailability(self, price, side):
-
 		volume = 0
-
 		for p in sorted(self.book[side], reverse=(side==SELL)):
 			if less_than_or_equal(p, price, side):
 				volume += self.book[side][p]
 			else:
 				break
-
 		return volume
 
-	def Fill(self, order): # return log list
-		'''
-		1. Determine whether orders can match
-			1-1. check if this price trigger PSM, if no, continue; if triggered, call function Start_PSM
-		2. addLog
-		3. delete orders
-			3-1. Only need to delete counter-part order
-		4. return leftover order if any
-		'''
 
-		pre_p = 0
+	def Fill(self, order):
+
+		pre_p = 0 # means pre-execution-price
 		# Check market orders...
 		if order.share > 0 and self.market_order and self.order_list[self.market_order[0]].side == opp(order.side):
 			# match opposite market order!
@@ -215,6 +203,7 @@ class OrderBook:
 					q = min(mo.share, order.share)
 					self.Execute(mo.id, mo.price, q) # in order_list
 					self.ExecLog(order, mo.price, q) # not in order_list
+					self.Acc_MA(mo.price, q)
 					order.share -= q
 
 		Prices = sorted(self.book[opp(order.side)], reverse=(order.side==SELL))
@@ -232,6 +221,7 @@ class OrderBook:
 				q = min(self.order_list[ID].share, order.share)
 				self.Execute(ID, Prices[i], q)
 				self.ExecLog(order, Prices[i], q)
+				self.Acc_MA(Prices[i], q)
 				order.share -= q
 
 			# if no order at this price level...
@@ -244,34 +234,69 @@ class OrderBook:
 			return order
 
 
+	def Acc_MA(self, price, volume):
+		self.ma_5.append((self.clock, price, volume))
+		self.total_volume += volume
+		self.total_dollar_volume += price * volume
+
+
 	def Check_Stab_Mech(self, price):
 
+		# Update MA
+		while self.ma_5 and self.ma_5[0][0] + 5*MIN >= self.clock:
+			self.total_volume -= self.ma_5[0][2]
+			self.total_dollar_volume -= self.ma_5[0][1] * self.ma_5[0][2]
+			self.ma_5.popleft()
+
+		# Determine smp
+		if self.state == AUCTION_PLUS_5:
+			smp = self.benchmark[-1]
+		elif self.state == TRADING:
+			if self.total_volume > 0:
+				smp = self.total_dollar_volume / self.total_volume
+			else:
+				smp = self.LastPrice()
+		# check +-3.5%
+		if price > smp * 1.035 or price < smp * 0.965:
+			# check more exception case...
+			if ( self.clock + 5*MIN <= CLOSE_TIME ) :
+				self.Start_Stab_Mech()
+				return True
+		# else
 		return False
-		'''
-		TODO
-		'''
+		
 
 	def Start_Stab_Mech(self):
-
-		return
+		self.AddLog("*** 價格穩定機制啟動 ***\n")
+		# 1. Delete market order
+		for ID in self.market_order.copy():
+			self.DeleteOrder(ID)
+		# 2. Change state to AUCTION, reset ncat
+		self.state = AUCTION
+		self.ncat = self.clock + 2*MIN 
 
 
 	def CallAuction(self):
 		# print(self.clock)
+		self.AddLog("---- Call Auction ----")
 		bid = self.book[BUY]
 		ask = self.book[SELL]
 		sortP = [sorted(self.book[BUY].keys(), reverse = True), sorted(self.book[SELL].keys())]
-
+		# sortP[BUY] decreasing, sortP[SELL] increasing
 		if (not bid) or (not ask):
+			# one of them is empty
 			return
-		count_bid, count_ask = bid[sortP[BUY][0]], ask[sortP[SELL][0]]
 		if sortP[BUY][0] < sortP[SELL][0]:
+			# No order can match
+			self.AddLog("End of Auction... No order can match.")
 			return
-		if sortP[BUY][-1] > sortP[SELL][-1]:
-			price_range = [sortP[BUY][-1], sortP[SELL][-1]]
+		# if sortP[BUY][-1] > sortP[SELL][-1]:
+		# 	price_range = [sortP[BUY][-1], sortP[SELL][-1]]
 
 		# determine possible price range
+		count_bid, count_ask = bid[sortP[BUY][0]], ask[sortP[SELL][0]]
 		i, j = 0, 0
+
 		while sortP[BUY][i] > sortP[SELL][j]:
 			if count_bid > count_ask:
 				j += 1
@@ -328,7 +353,7 @@ class OrderBook:
 
 		V = min(volume_ask, volume_bid)
 
-		# Trade 
+		# Execute 
 		for side in [BUY, SELL]:
 			acc_vol = 0
 			Prices = sortP[side].copy()
@@ -336,22 +361,47 @@ class OrderBook:
 			while V > acc_vol and i < len(Prices):
 			
 				IDs = self.id_book[side][Prices[i]].copy()
-
 				for ID in IDs:
 
 					q = min(self.order_list[ID].share, V - acc_vol)
 					self.Execute(ID, final_price, q)
+					# Do not Acc_MA here!!
 					acc_vol += q
 				i += 1
 
-		self.AddLog("Call Auction End... \nFinal_price = %.1f, Total deal volume = %d\n" % (final_price, V))
+		self.AddLog("End of Auction... \nFinal_price = %.1f, Total deal volume = %d\n" % (final_price, V))
 		self.benchmark.append(final_price)
+
+
+	def Execute(self, ID, price, volume):
+		# write execution log, and delete ID from self.order_list
+		# assert(ID in self.order_list)
+		self.ExecLog(self.order_list[ID], price, volume)
+		if volume == self.order_list[ID].share:
+			self.DeleteOrder(ID)
+		else:
+			self.ChangeOrder(ID, volume)
+
+
+	def ExecLog(self, order, price, volume): 
+		# write execution log, 
+		# call this function if order.id is not in self.order_list
+		assert(volume > 0)
+
+		if volume == order.share:
+			msg = "full"
+		else:
+			msg = "partial"
+
+		print("Time: %d. "%(self.clock) + "%s OrderId %d is %s fill @%.1f with volume %d" % (self.ticker, order.id, msg, price, volume))
+		
+		self.price_series.append(price)
+
 
 	def CheckTime(self, update_time): # check and change state 
 
 		assert(update_time >= self.clock) # time monotone
 		self.clock = update_time
-		
 
 		if update_time < OPEN_TIME or update_time > CLOSE_TIME:
 			self.state = AUCTION
@@ -365,11 +415,13 @@ class OrderBook:
 				next_state = TRADING
 
 			if (next_state == AUCTION_PLUS_5 or next_state == TRADING) and self.state==AUCTION:
-				self.AddLog("----Call Auction start----")
 				self.clock = self.ncat
 				self.CallAuction()
 				self.clock = update_time
-				#self.ncat = CLOSE_TIME + 5*MIN
+				# clear MA_5 data
+				self.ma_5 = deque()
+				self.total_dollar_volume = 0
+				self.total_volume = 0
 
 			self.state = next_state
 			
@@ -473,6 +525,10 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
+
+
+
 
 
 
