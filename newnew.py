@@ -23,7 +23,7 @@ class Order:
 		self.ticker = ticker
 		self.price_type = price_type
 		self.duration_type = duration_type
-		self.price = price
+		self.price = price # for MARKET order, 
 		self.share = share
 		self.side = side
 
@@ -67,12 +67,9 @@ class OrderBook:
 		# print("check price...")
 		if order.price_type == MARKET:
 			p = self.LastPrice()
-			if order.side == BUY:
-				# why can't we use  order.price = self.benchmark[0]*1.1  ??
-				order.price = max(p, max(self.book[BUY]) if self.book[BUY] else p, max(self.book[SELL]) if self.book[SELL] else p)
-			if order.side == SELL:
-				order.price = min(p, min(self.book[BUY]) if self.book[BUY] else p, min(self.book[SELL]) if self.book[SELL] else p)
-
+			f = max if order.side == BUY else min
+			order.price = f(p, f(self.book[BUY]) if self.book[BUY] else p, f(self.book[SELL]) if self.book[SELL] else p)
+			
 		elif (order.price > self.benchmark[0]*1.1) or (order.price < self.benchmark[0]*0.9):
 			# invalid order
 			self.AddLog("*** 超過漲迭停限制 ***")
@@ -189,28 +186,31 @@ class OrderBook:
 
 
 	def Fill(self, order):
-
-		pre_p = 0 # means pre-execution-price
-		# Check market orders...
+		# assert(self.state != AUCTION)
+		# 1. Check market orders on opposite side
 		if order.share > 0 and self.market_order and self.order_list[self.market_order[0]].side == opp(order.side):
 			# match opposite market order!
-			while order.share > 0 and self.market_order and less_than_or_equal(self.order_list[self.market_order[0]].price, order.price, order.side):
+			# Determine price p
+			f = max if opp(order.side) == BUY else min
+			tmp = self.LastPrice()
+			p = f( tmp, order.price, f(self.book[opp(order.side)]) if self.book[opp(order.side)] else tmp)
+			
+			if self.Check_Stab_Mech(p):
+				return order
+
+			while order.share > 0 and self.market_order:
 				mo = self.order_list[self.market_order[0]]
-				if mo.price != pre_p and self.Check_Stab_Mech(mo.price):
-					break
-				else:
-					pre_p = mo.price 
-					q = min(mo.share, order.share)
-					self.Execute(mo.id, mo.price, q) # in order_list
-					self.ExecLog(order, mo.price, q) # not in order_list
-					self.Acc_MA(mo.price, q)
-					order.share -= q
+				q = min(mo.share, order.share)
+				self.Execute(mo.id, p, q) # in order_list
+				self.ExecLog(order, p, q) # not in order_list
+				self.Acc_MA(p, q)
+				order.share -= q
 
 		Prices = sorted(self.book[opp(order.side)], reverse=(order.side==SELL))
 		i = 0
-		pre_p = 0
+		pre_p = 0 # means pre-execution-price
 
-		# print("Check limit orders...")
+		# 2. print("Try to match limit orders...")
 		while order.share > 0 and i < len(Prices) and less_than_or_equal(Prices[i], order.price, order.side):
 			# print("At least one match except PSM")
 			if Prices[i] != pre_p and self.Check_Stab_Mech(Prices[i]):
@@ -227,14 +227,14 @@ class OrderBook:
 			# if no order at this price level...
 			if Prices[i] not in self.book[opp(order.side)]:
 				i += 1
-		
+		# 3. return leftover order
 		if order.share == 0:
 			return None
 		else:
 			return order
 
 
-	def Acc_MA(self, price, volume):
+	def Acc_MA(self, price, volume): # accumulate moveing average
 		self.ma_5.append((self.clock, price, volume))
 		self.total_volume += volume
 		self.total_dollar_volume += price * volume
@@ -258,7 +258,7 @@ class OrderBook:
 				smp = self.LastPrice()
 		# check +-3.5%
 		if price > smp * 1.035 or price < smp * 0.965:
-			# check more exception case...
+			# check more exception case... !!!
 			if ( self.clock + 5*MIN <= CLOSE_TIME ) :
 				self.Start_Stab_Mech()
 				return True
@@ -525,11 +525,6 @@ def main():
 
 if __name__ == "__main__":
 	main()
-
-
-
-
-
 
 
 
