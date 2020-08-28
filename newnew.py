@@ -1,3 +1,19 @@
+from collections import deque
+import time
+import datetime
+import matplotlib.pyplot as plt
+import sys
+AUCTION, AUCTION_PLUS_5, TRADING = 1, 2, 3
+Ms = int(1e6)
+OPEN_TIME = 9*60*60*Ms
+CLOSE_TIME = (13*60+25)*60*Ms
+MIN = 60*Ms
+LIMIT, MARKET = 1, 0
+ROD, IOC, FOK= 1, 2, 3
+BUY, BID, SELL, ASK = 0, 0, 1, 1
+opp = lambda x : BUY+SELL-x
+less_than_or_equal = lambda x, y, side: (x == y) or ( ( x < y ) == (side == BUY) )
+less_than = lambda x, y, side:  (( x < y ) and (side == BUY)) or (( x > y ) and (side != BUY))
 def microsecondformat(microsecond):
 	delta = datetime.timedelta(microseconds=microsecond)
 	t = datetime.datetime.strptime("00:00:00.0","%H:%M:%S.%f")
