@@ -49,7 +49,7 @@ class OrderBook:
 
 		# history variables
 		self.benchmark = [close] # for 
-		self.price_series = [close]
+		self.price_series = [(0, close)]
 		# order book variables
 		self.book = [{}, {}] # [bid, ask], price : vol
 		self.id_book = [{}, {}] # [bid, ask], price : order_id
@@ -167,10 +167,10 @@ class OrderBook:
 
 
 	def LastPrice(self):
-		return self.price_series[-1]
+		return self.price_series[-1][1]
 
 
-	#============ private function =======================#
+	#====================== private function =======================#
 	def AddLog(self, msg): # Add text message through this function
 		print(msg)
 
@@ -196,6 +196,9 @@ class OrderBook:
 			p = f( tmp, order.price, f(self.book[opp(order.side)]) if self.book[opp(order.side)] else tmp)
 			
 			if self.Check_Stab_Mech(p):
+				# MARKET order will not initiate s.m.
+				if order.price_type == LIMIT: 
+					self.Start_Stab_Mech()
 				return order
 
 			while order.share > 0 and self.market_order:
@@ -214,6 +217,9 @@ class OrderBook:
 		while order.share > 0 and i < len(Prices) and less_than_or_equal(Prices[i], order.price, order.side):
 			# print("At least one match except PSM")
 			if Prices[i] != pre_p and self.Check_Stab_Mech(Prices[i]):
+				# MARKET order will not initiate s.m.
+				if order.price_type == LIMIT: 
+					self.Start_Stab_Mech()
 				break
 			else:
 				pre_p = Prices[i]
@@ -260,7 +266,6 @@ class OrderBook:
 		if price > smp * 1.035 or price < smp * 0.965:
 			# check more exception case... !!!
 			if ( self.clock + 5*MIN <= CLOSE_TIME ) :
-				self.Start_Stab_Mech()
 				return True
 		# else
 		return False
@@ -330,7 +335,7 @@ class OrderBook:
 				price_range = [sortP[BUY][i], sortP[SELL][j-1]]
 
 		# determine final price
-		benchmark = self.price_series[-1]
+		benchmark = self.price_series[-1][1]
 		if price_range[0] >= benchmark >= price_range[1]:
 			final_price = benchmark
 		elif benchmark > price_range[0]:
@@ -339,7 +344,7 @@ class OrderBook:
 			final_price = price_range[1]
 
 		# update price series
-		self.price_series.append(final_price)
+		self.price_series.append((self.clock, final_price))
 		self.benchmark.append(final_price)
 
 		# determine which side is fully filled and which side is partially filled
@@ -395,7 +400,7 @@ class OrderBook:
 
 		print("Time: %d. "%(self.clock) + "%s OrderId %d is %s fill @%.1f with volume %d" % (self.ticker, order.id, msg, price, volume))
 		
-		self.price_series.append(price)
+		self.price_series.append((self.clock, price))
 
 
 	def CheckTime(self, update_time): # check and change state 
@@ -525,8 +530,6 @@ def main():
 
 if __name__ == "__main__":
 	main()
-
-
 
 
 
