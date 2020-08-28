@@ -1,19 +1,8 @@
-# newnew.py
-from collections import deque
-import time
-import sys
-AUCTION, AUCTION_PLUS_5, TRADING = 1, 2, 3
-Ms = int(1e6)
-OPEN_TIME = 9*60*60*Ms
-CLOSE_TIME = (13*60+25)*60*Ms
-MIN = 60*Ms
-LIMIT, MARKET = 1, 0
-ROD, IOC, FOK= 1, 2, 3
-BUY, BID, SELL, ASK = 0, 0, 1, 1
-opp = lambda x : BUY+SELL-x
-less_than_or_equal = lambda x, y, side: (x == y) or ( ( x < y ) == (side == BUY) )
-less_than = lambda x, y, side:  (( x < y ) and (side == BUY)) or (( x > y ) and (side != BUY))
-
+def microsecondformat(microsecond):
+	delta = datetime.timedelta(microseconds=microsecond)
+	t = datetime.datetime.strptime("00:00:00.0","%H:%M:%S.%f")
+	final = t + delta
+	return final.strftime("%H:%M:%S.%f")
 
 class Order:
 	def __init__(self, time, ID, ticker, price_type, duration_type,
@@ -105,7 +94,7 @@ class OrderBook:
 			self.id_book[order.side][order.price].append(order.id)
 		
 		self.order_list[order.id] = order
-		self.AddLog("Time: %d. %s OrderId %d is added." % (self.clock, self.ticker, order.id))
+		self.AddLog("Time: %s. %s OrderId %d is added." % (microsecondformat(self.clock), self.ticker, order.id))
 
 
 	def DeleteOrder(self,ID):
@@ -121,7 +110,7 @@ class OrderBook:
 			# remove from id_book
 			self.id_book[order.side][order.price].remove(ID)
 		# remove from order_list 
-		self.AddLog("Time: %d. %s OrderId %d is removed." % (self.clock, self.ticker, ID))
+		self.AddLog("Time: %s. %s OrderId %d is removed." % (microsecondformat(self.clock), self.ticker, ID))
 		del self.order_list[ID]
 
 
@@ -134,7 +123,7 @@ class OrderBook:
 		# reduce vol=change of the order 
 		self.order_list[ID].share -= change
 		assert(self.order_list[ID].share > 0)
-		self.AddLog("Time: %d. %s OrderId %d is changed." % (self.clock, self.ticker, ID))
+		self.AddLog("Time: %s. %s OrderId %d is changed." % (microsecondformat(self.clock), self.ticker, ID))
 
 
 	def Present(self):
@@ -168,7 +157,8 @@ class OrderBook:
 
 	def LastPrice(self):
 		return self.price_series[-1][1]
-
+	def GetPriceSeries(self):
+		return self.price_series
 
 	#====================== private function =======================#
 	def AddLog(self, msg): # Add text message through this function
@@ -398,7 +388,7 @@ class OrderBook:
 		else:
 			msg = "partial"
 
-		print("Time: %d. "%(self.clock) + "%s OrderId %d is %s fill @%.1f with volume %d" % (self.ticker, order.id, msg, price, volume))
+		print("Time: %s. "%(microsecondformat(self.clock)) + "%s OrderId %d is %s fill @%.1f with volume %d" % (self.ticker, order.id, msg, price, volume))
 		
 		self.price_series.append((self.clock, price))
 
@@ -456,7 +446,12 @@ class Exchange:
 			self.orderbook[ticker].Present()
 		else:
 			print("Ticker not exist.")
-
+	def End(self):
+		for ticker in self.orderbook:
+			price_series = self.orderbook[ticker].GetPriceSeries()
+			plt.plot(price_series,label=ticker)
+			plt.legend(loc="best")
+			plt.show()
 
 
 def main():
@@ -525,13 +520,73 @@ def main():
 		if info[0] == "S":
 			exchange.Show(info[1])
 
+def main2():
 
+	'''
+	order input: 
+		time
+		ticker 
+		price_type 
+		duration_type 
+		share 
+		side 
+		(price)
+	'''
+	# O 8:45:40 TSLA LIMIT ROD 1000 BUY 45.5
+	# S TSLA
+	file = input()
+	TYPE = {"BUY":BUY,
+			"SELL":SELL,
+			"LIMIT":LIMIT,
+			"MARKET":MARKET,
+			"ROD":ROD,
+			"IOC":IOC,
+			"FOK":FOK }
+
+	exchange = Exchange()
+	count = 0
+	ID = 0
+	
+	with open(file,'r') as f :
+		for line in f:
+			info = line.strip().split()
+
+			if not info:
+				continue
+			if info[0] == "set":
+				exchange.OpenBook(info[1],float(info[2]))
+			if info[0] == "O":
+				# if ID == 0:
+				# 	exchange.OpenBook(info[2],float(info[7]))
+
+				a = datetime.datetime.strptime(info[1],"%H:%M:%S.%f")
+				now = a.hour*60*60*10**6 + a.minute*60*10**6+a.second*10**6+a.microsecond
+				
+				if TYPE[info[3]] == LIMIT:
+					order = Order(now,
+								  ID,
+								  info[2],
+								  TYPE[info[3]],
+								  TYPE[info[4]],
+								  int(info[5]),
+								  TYPE[info[6]],
+								  float(info[7]))
+
+				if TYPE[info[3]] == MARKET:
+					order = Order(now,
+								  ID,
+								  info[2],
+								  TYPE[info[3]],
+								  TYPE[info[4]],
+								  int(info[5]),
+								  TYPE[info[6]])
+
+				exchange.Send(order)
+				ID += 1
+
+			
+	exchange.End()
 
 
 if __name__ == "__main__":
-	main()
-
-
-
-
-
+	main2()
