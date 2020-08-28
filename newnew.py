@@ -1,7 +1,9 @@
 # newnew.py
 from collections import deque
-import time
+# import time
+import datetime
 import sys
+import matplotlib.pyplot as plt
 AUCTION, AUCTION_PLUS_5, TRADING = 1, 2, 3
 Ms = int(1e6)
 OPEN_TIME = 9*60*60*Ms
@@ -23,7 +25,7 @@ class Order:
 		self.ticker = ticker
 		self.price_type = price_type
 		self.duration_type = duration_type
-		self.price = price # for MARKET order, 
+		self.price = price
 		self.share = share
 		self.side = side
 
@@ -67,9 +69,12 @@ class OrderBook:
 		# print("check price...")
 		if order.price_type == MARKET:
 			p = self.LastPrice()
-			f = max if order.side == BUY else min
-			order.price = f(p, f(self.book[BUY]) if self.book[BUY] else p, f(self.book[SELL]) if self.book[SELL] else p)
-			
+			if order.side == BUY:
+				# why can't we use  order.price = self.benchmark[0]*1.1  ??
+				order.price = max(p, max(self.book[BUY]) if self.book[BUY] else p, max(self.book[SELL]) if self.book[SELL] else p)
+			if order.side == SELL:
+				order.price = min(p, min(self.book[BUY]) if self.book[BUY] else p, min(self.book[SELL]) if self.book[SELL] else p)
+
 		elif (order.price > self.benchmark[0]*1.1) or (order.price < self.benchmark[0]*0.9):
 			# invalid order
 			self.AddLog("*** 超過漲迭停限制 ***")
@@ -168,7 +173,8 @@ class OrderBook:
 
 	def LastPrice(self):
 		return self.price_series[-1]
-
+	def GetPriceSeries(self):
+		return self.price_series
 
 	#============ private function =======================#
 	def AddLog(self, msg): # Add text message through this function
@@ -186,31 +192,28 @@ class OrderBook:
 
 
 	def Fill(self, order):
-		# assert(self.state != AUCTION)
-		# 1. Check market orders on opposite side
+
+		pre_p = 0 # means pre-execution-price
+		# Check market orders...
 		if order.share > 0 and self.market_order and self.order_list[self.market_order[0]].side == opp(order.side):
 			# match opposite market order!
-			# Determine price p
-			f = max if opp(order.side) == BUY else min
-			tmp = self.LastPrice()
-			p = f( tmp, order.price, f(self.book[opp(order.side)]) if self.book[opp(order.side)] else tmp)
-			
-			if self.Check_Stab_Mech(p):
-				return order
-
-			while order.share > 0 and self.market_order:
+			while order.share > 0 and self.market_order and less_than_or_equal(self.order_list[self.market_order[0]].price, order.price, order.side):
 				mo = self.order_list[self.market_order[0]]
-				q = min(mo.share, order.share)
-				self.Execute(mo.id, p, q) # in order_list
-				self.ExecLog(order, p, q) # not in order_list
-				self.Acc_MA(p, q)
-				order.share -= q
+				if mo.price != pre_p and self.Check_Stab_Mech(mo.price):
+					break
+				else:
+					pre_p = mo.price 
+					q = min(mo.share, order.share)
+					self.Execute(mo.id, mo.price, q) # in order_list
+					self.ExecLog(order, mo.price, q) # not in order_list
+					self.Acc_MA(mo.price, q)
+					order.share -= q
 
 		Prices = sorted(self.book[opp(order.side)], reverse=(order.side==SELL))
 		i = 0
-		pre_p = 0 # means pre-execution-price
+		pre_p = 0
 
-		# 2. print("Try to match limit orders...")
+		# print("Check limit orders...")
 		while order.share > 0 and i < len(Prices) and less_than_or_equal(Prices[i], order.price, order.side):
 			# print("At least one match except PSM")
 			if Prices[i] != pre_p and self.Check_Stab_Mech(Prices[i]):
@@ -227,14 +230,14 @@ class OrderBook:
 			# if no order at this price level...
 			if Prices[i] not in self.book[opp(order.side)]:
 				i += 1
-		# 3. return leftover order
+		
 		if order.share == 0:
 			return None
 		else:
 			return order
 
 
-	def Acc_MA(self, price, volume): # accumulate moveing average
+	def Acc_MA(self, price, volume):
 		self.ma_5.append((self.clock, price, volume))
 		self.total_volume += volume
 		self.total_dollar_volume += price * volume
@@ -258,7 +261,7 @@ class OrderBook:
 				smp = self.LastPrice()
 		# check +-3.5%
 		if price > smp * 1.035 or price < smp * 0.965:
-			# check more exception case... !!!
+			# check more exception case...
 			if ( self.clock + 5*MIN <= CLOSE_TIME ) :
 				self.Start_Stab_Mech()
 				return True
@@ -451,7 +454,12 @@ class Exchange:
 			self.orderbook[ticker].Present()
 		else:
 			print("Ticker not exist.")
-
+	def End(self):
+		for ticker in self.orderbook:
+			price_series = self.orderbook[ticker].GetPriceSeries()
+			plt.plot(price_series,label=ticker)
+			plt.legend(loc="best")
+			plt.show()
 
 
 def main():
@@ -487,7 +495,8 @@ def main():
 
 		if not info:
 			continue
-
+		# if info[0] == "set":
+		# 	exchange.OpenBook(info[1],float(info[2]))
 		if info[0] == "O":
 			if ID == 0:
 				exchange.OpenBook(info[2],float(info[7]))
@@ -521,13 +530,77 @@ def main():
 			exchange.Show(info[1])
 
 
+def main2():
+
+	'''
+	order input: 
+		time
+		ticker 
+		price_type 
+		duration_type 
+		share 
+		side 
+		(price)
+	'''
+	# O 8:45:40 TSLA LIMIT ROD 1000 BUY 45.5
+	# S TSLA
+	file = input()
+	TYPE = {"BUY":BUY,
+			"SELL":SELL,
+			"LIMIT":LIMIT,
+			"MARKET":MARKET,
+			"ROD":ROD,
+			"IOC":IOC,
+			"FOK":FOK }
+
+	exchange = Exchange()
+	count = 0
+	ID = 0
+	
+	with open(file,'r') as f :
+		for line in f:
+			info = line.strip().split()
+
+			if not info:
+				continue
+			if info[0] == "set":
+				exchange.OpenBook(info[1],float(info[2]))
+			if info[0] == "O":
+				# if ID == 0:
+				# 	exchange.OpenBook(info[2],float(info[7]))
+
+				a = datetime.datetime.strptime(info[1],"%H:%M:%S.%f")
+				now = a.hour*60*60*10**6 + a.minute*60*10**6+a.second*10**6+a.microsecond
+				
+				if TYPE[info[3]] == LIMIT:
+					order = Order(now,
+								  ID,
+								  info[2],
+								  TYPE[info[3]],
+								  TYPE[info[4]],
+								  int(info[5]),
+								  TYPE[info[6]],
+								  float(info[7]))
+
+				if TYPE[info[3]] == MARKET:
+					order = Order(now,
+								  ID,
+								  info[2],
+								  TYPE[info[3]],
+								  TYPE[info[4]],
+								  int(info[5]),
+								  TYPE[info[6]])
+
+				exchange.Send(order)
+				ID += 1
+
+			
+	exchange.End()
+
 
 
 if __name__ == "__main__":
-	main()
-
-
-
+	main2()
 
 
 
